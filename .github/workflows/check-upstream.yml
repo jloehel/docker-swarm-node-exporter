@@ -88,7 +88,7 @@ jobs:
 
           ## Steps to update
           1. Update \`NODE_EXPORTER_VERSION\` in Dockerfile to \`${UPSTREAM}\`
-          2. Create a new release with tag \`${UPSTREAM}\`
+          2. Create a new release with tag \`${UPSTREAM}-1\`
 
           ---
           *This issue was automatically created by the weekly version check workflow.*" \

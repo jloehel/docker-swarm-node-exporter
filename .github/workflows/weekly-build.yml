@@ -1,0 +1,96 @@
+name: Weekly Build
+
+on:
+  schedule:
+    # Every Saturday at 02:00 UTC
+    - cron: "0 2 * * 6"
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: swarm-node-exporter
+  REGISTRY_GHCR: ghcr.io
+  REGISTRY_DOCKER: docker.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version and latest release tag
+        id: version
+        run: |
+          VERSION=$(grep -oP 'ARG NODE_EXPORTER_VERSION=\K[0-9.]+' Dockerfile)
+          # Get latest release tag (e.g. 1.10.2-1)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "${VERSION}-1")
+          {
+            echo "version=${VERSION}"
+            echo "tag=${LATEST_TAG}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}, Latest tag: ${LATEST_TAG}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          build-args: |
+            NODE_EXPORTER_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ${{ env.REGISTRY_GHCR }}/jloehel/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY_GHCR }}/jloehel/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY_GHCR }}/jloehel/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY_DOCKER }}/jloehel/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY_DOCKER }}/jloehel/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY_DOCKER }}/jloehel/${{ env.IMAGE_NAME }}:latest
+
+      - name: Delete untagged GHCR images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ env.IMAGE_NAME }}
+          package-type: container
+          delete-only-untagged-versions: true
+
+      - name: Delete untagged Docker Hub images
+        run: |
+          # Get token
+          TOKEN=$(curl -s -X POST "https://hub.docker.com/v2/users/login/" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "${{ secrets.DOCKERHUB_USERNAME }}", "password": "${{ secrets.DOCKERHUB_TOKEN }}"}' \
+            | jq -r '.token')
+
+          # Delete untagged digests
+          curl -s "https://hub.docker.com/v2/repositories/jloehel/${{ env.IMAGE_NAME }}/tags?page_size=100" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            | jq -r '.results[] | select(.name == null) | .digest' \
+            | while read -r DIGEST; do
+                if [ -n "$DIGEST" ]; then
+                  echo "Deleting untagged digest: ${DIGEST}"
+                  curl -s -X DELETE "https://hub.docker.com/v2/repositories/jloehel/${{ env.IMAGE_NAME }}/digests/${DIGEST}" \
+                    -H "Authorization: Bearer ${TOKEN}"
+                fi
+              done
+        continue-on-error: true
