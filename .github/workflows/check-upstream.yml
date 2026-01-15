@@ -1,0 +1,97 @@
+name: Check Upstream Release
+
+on:
+  schedule:
+    # Every Sunday at 03:00 UTC
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+
+env:
+  UPSTREAM_IMAGE: prom/node-exporter
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get current version from Dockerfile
+        id: current
+        run: |
+          VERSION=$(grep -oP 'ARG NODE_EXPORTER_VERSION=\K[0-9.]+' Dockerfile)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Current version: ${VERSION}"
+
+      - name: Get latest upstream version
+        id: upstream
+        run: |
+          # Get tags from Docker Hub API
+          TAGS=$(curl -s "https://hub.docker.com/v2/repositories/${UPSTREAM_IMAGE}/tags?page_size=100" | \
+            jq -r '.results[].name' | \
+            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | \
+            sed 's/^v//' | \
+            sort -V | \
+            tail -1)
+          echo "version=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "Latest upstream version: ${TAGS}"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          UPSTREAM="${{ steps.upstream.outputs.version }}"
+
+          if [ "$CURRENT" = "$UPSTREAM" ]; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+            echo "Already up to date"
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+            echo "New version available: ${UPSTREAM}"
+          fi
+
+      - name: Check for existing issue
+        id: check_issue
+        if: steps.compare.outputs.up_to_date == 'false'
+        run: |
+          UPSTREAM="${{ steps.upstream.outputs.version }}"
+          ISSUE_TITLE="Update node-exporter to ${UPSTREAM}"
+
+          # Search for open issues with this title
+          EXISTING=$(gh issue list --state open --search "${ISSUE_TITLE}" --json number --jq 'length')
+
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Issue already exists"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create issue for new version
+        if: steps.compare.outputs.up_to_date == 'false' && steps.check_issue.outputs.exists == 'false'
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          UPSTREAM="${{ steps.upstream.outputs.version }}"
+
+          gh issue create \
+            --title "Update node-exporter to ${UPSTREAM}" \
+            --body "A new version of \`prom/node-exporter\` is available.
+
+          **Current version:** ${CURRENT}
+          **New version:** ${UPSTREAM}
+
+          ## Changelog
+          See [node_exporter releases](https://github.com/prometheus/node_exporter/releases/tag/v${UPSTREAM})
+
+          ## Steps to update
+          1. Update \`NODE_EXPORTER_VERSION\` in Dockerfile to \`${UPSTREAM}\`
+          2. Create a new release with tag \`${UPSTREAM}\`
+
+          ---
+          *This issue was automatically created by the weekly version check workflow.*" \
+            --label "dependencies"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
