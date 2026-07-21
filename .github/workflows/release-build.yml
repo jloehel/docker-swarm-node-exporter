@@ -68,7 +68,7 @@ jobs:
             ${{ env.REGISTRY_DOCKER }}/jloehel/${{ env.IMAGE_NAME }}:${{ steps.release.outputs.version }}
             ${{ env.REGISTRY_DOCKER }}/jloehel/${{ env.IMAGE_NAME }}:latest
 
-      - name: Update README with new version
+      - name: Update README and Dockerfile with new version
         run: |
           TAG="${{ steps.release.outputs.tag }}"
           VERSION="${{ steps.release.outputs.version }}"
@@ -76,6 +76,7 @@ jobs:
 
           # Update Dockerfile example
           sed -i "s/NODE_EXPORTER_VERSION=[0-9.]\+/NODE_EXPORTER_VERSION=${VERSION}/g" README.md
+          sed -i "s/NODE_EXPORTER_VERSION=[0-9.]\+/NODE_EXPORTER_VERSION=${VERSION}/g" Dockerfile
           sed -i "s/swarm-node-exporter:[0-9.]\+-[0-9]\+/swarm-node-exporter:${TAG}/g" README.md
 
           # Check if tag already in supported tags table
