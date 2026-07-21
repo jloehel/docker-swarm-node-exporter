@@ -58,10 +58,11 @@ node_meta{node_id="abc123", container_label_com_docker_swarm_node_id="abc123", n
 | Tag | Description |
 |-----|-------------|
 | `latest` | Latest release |
+| `1.12.1-1` | node-exporter 1.12.1, build 1 |
 | `1.12.0-1` | node-exporter 1.12.0, build 1 |
 | `1.11.1-1` | node-exporter 1.11.1, build 1 |
 | `1.10.2-1` | node-exporter 1.10.2, build 1 |
-| `1.12.0` | Specific node-exporter version (latest build) |
+| `1.12.1` | Specific node-exporter version (latest build) |
 
 ## Building
 
@@ -72,7 +73,7 @@ docker build -t swarm-node-exporter .
 With specific version:
 
 ```bash
-docker build --build-arg NODE_EXPORTER_VERSION=1.12.0 -t swarm-node-exporter:1.12.0-1 .
+docker build --build-arg NODE_EXPORTER_VERSION=1.12.1 -t swarm-node-exporter:1.12.1-1 .
 ```
 
 ## License
