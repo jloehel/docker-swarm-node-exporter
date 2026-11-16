@@ -67,12 +67,10 @@ jobs:
             ${{ env.REGISTRY_DOCKER }}/jloehel/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY_DOCKER }}/jloehel/${{ env.IMAGE_NAME }}:latest
 
-      - name: Delete untagged GHCR images
-        uses: actions/delete-package-versions@v5
+      - name: Cleanup untagged GHCR images
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
-          package-name: ${{ env.IMAGE_NAME }}
-          package-type: container
-          delete-only-untagged-versions: true
+          package: ${{ env.IMAGE_NAME }}
 
       - name: Delete untagged Docker Hub images
         run: |
