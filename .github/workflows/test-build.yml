@@ -28,7 +28,7 @@ jobs:
 
       - name: Test container startup
         run: |
-          docker run -d --name test-container ${{ env.IMAGE_NAME }}:test
+          docker run -d --name test-container ${{ env.IMAGE_NAME }}:test --no-collector.ipvs
           sleep 5
           docker logs test-container
           # Check if container is still running
